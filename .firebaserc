@@ -1,0 +1,6 @@
+{
+  "projects": {
+    "default": "default-firebase-project-id",
+    "firebase-project-alias": "firebase-project-id"
+  }
+}
