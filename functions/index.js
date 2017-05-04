@@ -2,6 +2,8 @@
 const PubSub = require('@google-cloud/pubsub');
 var functions = require('firebase-functions');
 var admin = require('firebase-admin');
+var dateFormat = require('dateformat');
+var util = require('util');
 admin.initializeApp(functions.config().firebase);
 
 exports.temperatureUpdate = functions.pubsub.topic('temperature').onPublish(event => {
@@ -20,9 +22,10 @@ exports.fermentationData = functions.https.onRequest((req, res) => {
   	res.status(200).send();
   } else if (req.method == "GET") {
   	console.log("Recebido GET: " + req.query.serial);
-  	var ref = admin.database().ref('/'+req.query.serial).once('value').then(function(snapshot) {
+  	var ref = admin.database().ref('/' + req.query.serial).once('value', function(data) {
   		res.set('Content-Type', 'application/json');
-  		res.status(200).send(snapshot);
+      console.log('Dados: ' + data.val());
+  		res.status(200).send(data.val());
 	});
   }
 });
@@ -62,4 +65,37 @@ exports.sendCommandThermostat = functions.https.onRequest((req, res) => {
 	} else if (req.method == "GET") {
 		res.status(400).send("Method not supported.");		
 	}
+});
+
+exports.fermentationDetailsAction = functions.https.onRequest((req, res) => {
+  if(req.method == "POST") {
+    var jsonRes = {};
+    var ref = admin.database().ref('/00000000cbdacf2f').once('value', function(snapshot) {
+      var data = snapshot.val();
+      var action = req.body;
+      if (action.result.parameters.hasOwnProperty('OG') && action.result.parameters.OG != "") {
+        jsonRes.speech = "The Original Gravity is " + data.og; 
+        jsonRes.displayText = "The Original Gravity is " + data.og;
+      } else if (action.result.parameters.hasOwnProperty('temperature') && action.result.parameters.temperature != "") {
+        jsonRes.speech = "The mash temperature is now " + data.temperature + " celsius degree"; 
+        jsonRes.displayText = "The mash temperature is now " + data.temperature + " celsius degree";
+      } else if (action.result.parameters.hasOwnProperty('fermentation_temperature') && action.result.parameters.fermentation_temperature != "") {
+        jsonRes.speech = "The current fermentation temperature is " + data.constant_temperature + " celsius degree"; 
+        jsonRes.displayText = "The current fermentation temperature is " + data.constant_temperature + " celsius degree";
+      } else if (action.result.parameters.hasOwnProperty('start_date') && action.result.parameters.start_date != "") {
+        var start_date_formatted = dateFormat(data.start_date, "mmmm d, yyyy");
+        jsonRes.speech = "This fermentation started on " + start_date_formatted;
+        jsonRes.displayText = "This fermentation started on " + start_date_formatted;
+      } else {
+        jsonRes.speech = "Sorry but I don't have this information. Please try again.";
+        jsonRes.displayText = "Sorry but I don't have this information. Please try again.";
+      }
+      jsonRes.source = "Brewbot"
+      res.type('application/json');
+      res.json(jsonRes)
+      res.status(200).end();
+    });
+  } else if (req.method == "GET") {
+    res.status(400).send("Method not supported.");
+  }
 });
